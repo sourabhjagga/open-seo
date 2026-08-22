@@ -11,5 +11,9 @@ export {
 } from "./providers/base";
 
 export { SerperProvider } from "./providers/serper";
+export { SerpApiProvider } from "./providers/serpapi";
+export { BrightDataProvider } from "./providers/brightdata";
+export { ScrapingdogProvider } from "./providers/scrapingdog";
+export { SearchApiProvider } from "./providers/searchapi";
 
 export { getSerpResults } from "./adapter";

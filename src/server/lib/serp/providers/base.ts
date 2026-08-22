@@ -44,3 +44,13 @@ export interface SerpProvider {
   /** Fetch live organic SERP entries for the given keyword/location/language. */
   liveSerp(input: SerpLiveInput): Promise<SerpLiveItem[]>;
 }
+
+/** Extract a bare hostname (no leading "www.") from a link URL; null if unparseable. */
+export function domainFromLink(link: unknown): string | null {
+  if (typeof link !== "string" || !link) return null;
+  try {
+    return new URL(link).hostname.replace(/^www\./, "") || null;
+  } catch {
+    return null;
+  }
+}
