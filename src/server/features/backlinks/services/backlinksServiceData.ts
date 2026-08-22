@@ -7,6 +7,7 @@ import {
   type BacklinksHistoryItem,
   type BacklinksSummaryItem,
 } from "@/server/lib/dataforseo";
+import { fetchFreeBacklinksSummary } from "@/server/lib/backlinks/free";
 import {
   normalizeBacklinksSpamFilterOptions,
   type BacklinksLookupInput,
@@ -116,6 +117,35 @@ export async function profileBacklinksOverview(
       BACKLINKS_OVERVIEW_TTL_SECONDS,
     );
     return { overview };
+  }
+
+  // BACKLINKS_PROVIDER=crawly|seomcp: free providers cover domain-scope
+  // counts only (no history/trends) — fall back to metered DataForSEO on any
+  // failure so the overview never breaks.
+  try {
+    const freeSummary = await fetchFreeBacklinksSummary(
+      normalizedTarget.apiTarget,
+    );
+    if (freeSummary) {
+      const overview = buildOverviewResult({
+        normalizedTarget,
+        now,
+        summary: freeSummary,
+        history: [],
+      });
+      await cacheValue(
+        cache,
+        cacheKey,
+        { overview },
+        BACKLINKS_OVERVIEW_TTL_SECONDS,
+      );
+      return { overview };
+    }
+  } catch (freeError) {
+    console.warn(
+      `Free backlinks provider failed for ${normalizedTarget.apiTarget}, falling back to DataForSEO:`,
+      freeError instanceof Error ? freeError.message : freeError,
+    );
   }
 
   const dateRange = buildBacklinksDateRange(now);
