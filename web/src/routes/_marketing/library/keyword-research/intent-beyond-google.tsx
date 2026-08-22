@@ -6,6 +6,8 @@ import Content, {
 import { LibrarySpokePage } from "@/components/library-page";
 import { buildPageSeo } from "@/lib/seo";
 
+const PATH = "/library/keyword-research/intent-beyond-google";
+
 export const Route = createFileRoute(
   "/_marketing/library/keyword-research/intent-beyond-google",
 )({
@@ -13,7 +15,7 @@ export const Route = createFileRoute(
     buildPageSeo({
       title: "Keyword Research Beyond Google: Pinterest, LinkedIn and AI",
       description: frontmatter.description,
-      path: "/library/keyword-research/intent-beyond-google",
+      path: PATH,
       titleSuffix: "OpenSEO Library",
       ogType: "article",
     }),
@@ -22,6 +24,7 @@ export const Route = createFileRoute(
       title={frontmatter.title}
       description={frontmatter.description}
       crumb="Intent beyond Google"
+      path={PATH}
     >
       <Content components={{ ...defaultMdxComponents }} />
     </LibrarySpokePage>

@@ -6,6 +6,8 @@ import Content, {
 import { LibrarySpokePage } from "@/components/library-page";
 import { buildPageSeo } from "@/lib/seo";
 
+const PATH = "/library/keyword-research/positioning-to-demand";
+
 export const Route = createFileRoute(
   "/_marketing/library/keyword-research/positioning-to-demand",
 )({
@@ -13,7 +15,7 @@ export const Route = createFileRoute(
     buildPageSeo({
       title: "Does Your Positioning Have Search Demand Behind It?",
       description: frontmatter.description,
-      path: "/library/keyword-research/positioning-to-demand",
+      path: PATH,
       titleSuffix: "OpenSEO Library",
       ogType: "article",
     }),
@@ -22,6 +24,7 @@ export const Route = createFileRoute(
       title={frontmatter.title}
       description={frontmatter.description}
       crumb="Map positioning to real demand"
+      path={PATH}
     >
       <Content components={{ ...defaultMdxComponents }} />
     </LibrarySpokePage>

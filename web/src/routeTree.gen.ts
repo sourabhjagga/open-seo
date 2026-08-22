@@ -28,6 +28,7 @@ import { Route as MarketingPricingRouteImport } from './routes/_marketing/pricin
 import { Route as MarketingOpenSourceSeoRouteImport } from './routes/_marketing/open-source-seo'
 import { Route as MarketingGoogleSearchConsoleMcpRouteImport } from './routes/_marketing/google-search-console-mcp'
 import { Route as MarketingBacklinkCheckerRouteImport } from './routes/_marketing/backlink-checker'
+import { Route as MarketingLibraryIndexRouteImport } from './routes/_marketing/library/index'
 import { Route as MarketingFeaturesIndexRouteImport } from './routes/_marketing/features/index'
 import { Route as MarketingFeaturesSiteAuditRouteImport } from './routes/_marketing/features/site-audit'
 import { Route as MarketingFeaturesSavedKeywordsRouteImport } from './routes/_marketing/features/saved-keywords'
@@ -145,6 +146,11 @@ const MarketingBacklinkCheckerRoute =
     path: '/backlink-checker',
     getParentRoute: () => MarketingRoute,
   } as any)
+const MarketingLibraryIndexRoute = MarketingLibraryIndexRouteImport.update({
+  id: '/library/',
+  path: '/library/',
+  getParentRoute: () => MarketingRoute,
+} as any)
 const MarketingFeaturesIndexRoute = MarketingFeaturesIndexRouteImport.update({
   id: '/features/',
   path: '/features/',
@@ -296,6 +302,7 @@ export interface FileRoutesByFullPath {
   '/features/saved-keywords': typeof MarketingFeaturesSavedKeywordsRoute
   '/features/site-audit': typeof MarketingFeaturesSiteAuditRoute
   '/features/': typeof MarketingFeaturesIndexRoute
+  '/library/': typeof MarketingLibraryIndexRoute
   '/library/keyword-research/cluster-topical-hubs': typeof MarketingLibraryKeywordResearchClusterTopicalHubsRoute
   '/library/keyword-research/gsc-programmatic-discovery': typeof MarketingLibraryKeywordResearchGscProgrammaticDiscoveryRoute
   '/library/keyword-research/intent-beyond-google': typeof MarketingLibraryKeywordResearchIntentBeyondGoogleRoute
@@ -336,6 +343,7 @@ export interface FileRoutesByTo {
   '/features/saved-keywords': typeof MarketingFeaturesSavedKeywordsRoute
   '/features/site-audit': typeof MarketingFeaturesSiteAuditRoute
   '/features': typeof MarketingFeaturesIndexRoute
+  '/library': typeof MarketingLibraryIndexRoute
   '/library/keyword-research/cluster-topical-hubs': typeof MarketingLibraryKeywordResearchClusterTopicalHubsRoute
   '/library/keyword-research/gsc-programmatic-discovery': typeof MarketingLibraryKeywordResearchGscProgrammaticDiscoveryRoute
   '/library/keyword-research/intent-beyond-google': typeof MarketingLibraryKeywordResearchIntentBeyondGoogleRoute
@@ -378,6 +386,7 @@ export interface FileRoutesById {
   '/_marketing/features/saved-keywords': typeof MarketingFeaturesSavedKeywordsRoute
   '/_marketing/features/site-audit': typeof MarketingFeaturesSiteAuditRoute
   '/_marketing/features/': typeof MarketingFeaturesIndexRoute
+  '/_marketing/library/': typeof MarketingLibraryIndexRoute
   '/_marketing/library/keyword-research/cluster-topical-hubs': typeof MarketingLibraryKeywordResearchClusterTopicalHubsRoute
   '/_marketing/library/keyword-research/gsc-programmatic-discovery': typeof MarketingLibraryKeywordResearchGscProgrammaticDiscoveryRoute
   '/_marketing/library/keyword-research/intent-beyond-google': typeof MarketingLibraryKeywordResearchIntentBeyondGoogleRoute
@@ -420,6 +429,7 @@ export interface FileRouteTypes {
     | '/features/saved-keywords'
     | '/features/site-audit'
     | '/features/'
+    | '/library/'
     | '/library/keyword-research/cluster-topical-hubs'
     | '/library/keyword-research/gsc-programmatic-discovery'
     | '/library/keyword-research/intent-beyond-google'
@@ -460,6 +470,7 @@ export interface FileRouteTypes {
     | '/features/saved-keywords'
     | '/features/site-audit'
     | '/features'
+    | '/library'
     | '/library/keyword-research/cluster-topical-hubs'
     | '/library/keyword-research/gsc-programmatic-discovery'
     | '/library/keyword-research/intent-beyond-google'
@@ -501,6 +512,7 @@ export interface FileRouteTypes {
     | '/_marketing/features/saved-keywords'
     | '/_marketing/features/site-audit'
     | '/_marketing/features/'
+    | '/_marketing/library/'
     | '/_marketing/library/keyword-research/cluster-topical-hubs'
     | '/_marketing/library/keyword-research/gsc-programmatic-discovery'
     | '/_marketing/library/keyword-research/intent-beyond-google'
@@ -661,6 +673,13 @@ declare module '@tanstack/react-router' {
       path: '/backlink-checker'
       fullPath: '/backlink-checker'
       preLoaderRoute: typeof MarketingBacklinkCheckerRouteImport
+      parentRoute: typeof MarketingRoute
+    }
+    '/_marketing/library/': {
+      id: '/_marketing/library/'
+      path: '/library'
+      fullPath: '/library/'
+      preLoaderRoute: typeof MarketingLibraryIndexRouteImport
       parentRoute: typeof MarketingRoute
     }
     '/_marketing/features/': {
@@ -824,6 +843,7 @@ interface MarketingRouteChildren {
   MarketingFeaturesSavedKeywordsRoute: typeof MarketingFeaturesSavedKeywordsRoute
   MarketingFeaturesSiteAuditRoute: typeof MarketingFeaturesSiteAuditRoute
   MarketingFeaturesIndexRoute: typeof MarketingFeaturesIndexRoute
+  MarketingLibraryIndexRoute: typeof MarketingLibraryIndexRoute
   MarketingLibraryKeywordResearchClusterTopicalHubsRoute: typeof MarketingLibraryKeywordResearchClusterTopicalHubsRoute
   MarketingLibraryKeywordResearchGscProgrammaticDiscoveryRoute: typeof MarketingLibraryKeywordResearchGscProgrammaticDiscoveryRoute
   MarketingLibraryKeywordResearchIntentBeyondGoogleRoute: typeof MarketingLibraryKeywordResearchIntentBeyondGoogleRoute
@@ -854,6 +874,7 @@ const MarketingRouteChildren: MarketingRouteChildren = {
   MarketingFeaturesSavedKeywordsRoute: MarketingFeaturesSavedKeywordsRoute,
   MarketingFeaturesSiteAuditRoute: MarketingFeaturesSiteAuditRoute,
   MarketingFeaturesIndexRoute: MarketingFeaturesIndexRoute,
+  MarketingLibraryIndexRoute: MarketingLibraryIndexRoute,
   MarketingLibraryKeywordResearchClusterTopicalHubsRoute:
     MarketingLibraryKeywordResearchClusterTopicalHubsRoute,
   MarketingLibraryKeywordResearchGscProgrammaticDiscoveryRoute:

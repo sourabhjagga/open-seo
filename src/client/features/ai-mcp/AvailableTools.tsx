@@ -1,5 +1,3 @@
-import { GA4_OAUTH_APP_PENDING } from "@/shared/ga4";
-
 type McpTool = {
   name: string;
   title: string;
@@ -12,6 +10,23 @@ type ToolCategory = {
 };
 
 const toolCategories: ToolCategory[] = [
+  {
+    label: "Project Context",
+    tools: [
+      {
+        name: "get_project_context",
+        title: "Get project context",
+        description:
+          "Read your project's goals, positioning, competitors, and key pages.",
+      },
+      {
+        name: "update_project_context",
+        title: "Update project context",
+        description:
+          "Save what an agent learned back to your shared project context.",
+      },
+    ],
+  },
   {
     label: "Keywords",
     tools: [
@@ -126,6 +141,34 @@ const toolCategories: ToolCategory[] = [
         title: "Get business questions",
         description: "Read Google Business Profile Q&A rows.",
       },
+      {
+        name: "get_business_profile",
+        title: "Get business profile",
+        description:
+          "Audit a Google Business Profile's categories, rating, hours, and claim status.",
+      },
+      {
+        name: "get_business_reviews",
+        title: "Get business reviews",
+        description:
+          "Collect Google reviews, including owner replies and other-site sources.",
+      },
+      {
+        name: "get_business_updates",
+        title: "Get business updates",
+        description: "Check posting activity on a Google Business Profile.",
+      },
+      {
+        name: "list_business_categories",
+        title: "List business categories",
+        description: "Find valid Google Business category slugs.",
+      },
+      {
+        name: "get_local_rank_grid",
+        title: "Get local rank grid",
+        description:
+          "Check Google Maps rank at each point of a grid around a business.",
+      },
     ],
   },
   {
@@ -209,14 +252,10 @@ const toolCategories: ToolCategory[] = [
   },
 ];
 
-const visibleCategories = GA4_OAUTH_APP_PENDING
-  ? toolCategories.filter((cat) => cat.label !== "Google Analytics")
-  : toolCategories;
-
 export function AvailableTools() {
   return (
     <div className="grid gap-x-8 gap-y-8 md:grid-cols-2">
-      {visibleCategories.map((cat) => (
+      {toolCategories.map((cat) => (
         <div key={cat.label}>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
             {cat.label}

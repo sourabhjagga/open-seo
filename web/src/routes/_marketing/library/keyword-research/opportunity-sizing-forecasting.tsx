@@ -6,6 +6,8 @@ import Content, {
 import { LibrarySpokePage } from "@/components/library-page";
 import { buildPageSeo } from "@/lib/seo";
 
+const PATH = "/library/keyword-research/opportunity-sizing-forecasting";
+
 export const Route = createFileRoute(
   "/_marketing/library/keyword-research/opportunity-sizing-forecasting",
 )({
@@ -13,7 +15,7 @@ export const Route = createFileRoute(
     buildPageSeo({
       title: "SEO Forecasting: Size a Keyword Opportunity Before You Build",
       description: frontmatter.description,
-      path: "/library/keyword-research/opportunity-sizing-forecasting",
+      path: PATH,
       titleSuffix: "OpenSEO Library",
       ogType: "article",
     }),
@@ -22,6 +24,7 @@ export const Route = createFileRoute(
       title={frontmatter.title}
       description={frontmatter.description}
       crumb="Opportunity sizing & forecasting"
+      path={PATH}
     >
       <Content components={{ ...defaultMdxComponents }} />
     </LibrarySpokePage>
