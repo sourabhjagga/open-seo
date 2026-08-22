@@ -1,6 +1,8 @@
 import { detectUrlTemplate, canonicalUrlKey } from "./url-utils";
 import type { BillingCustomerContext } from "@/server/billing/subscription";
 import { createDataforseoClient } from "@/server/lib/dataforseo";
+import { fetchPsiLighthouseResult } from "@/server/lib/lighthouse/psi";
+import { getOptionalEnvValue } from "@/server/lib/runtime-env";
 import type { LighthouseResult, LighthouseStrategy } from "./types";
 import { putTextToR2 } from "@/server/lib/r2";
 
@@ -30,7 +32,25 @@ export async function fetchLighthouseResult(
 ): Promise<LighthouseFetchResult> {
   const dataforseo = createDataforseoClient(billingCustomer);
   try {
-    const data = await dataforseo.lighthouse.live({ url, strategy });
+    let data;
+    // LIGHTHOUSE_PROVIDER=psi runs the free PageSpeed Insights API first and
+    // falls back to metered DataForSEO on any failure.
+    if ((await getOptionalEnvValue("LIGHTHOUSE_PROVIDER")) === "psi") {
+      try {
+        data = await fetchPsiLighthouseResult({
+          url,
+          strategy: strategy as "mobile" | "desktop",
+        });
+      } catch (psiError) {
+        console.warn(
+          `PSI Lighthouse failed for ${url}, falling back to DataForSEO:`,
+          psiError instanceof Error ? psiError.message : psiError,
+        );
+        data = await dataforseo.lighthouse.live({ url, strategy });
+      }
+    } else {
+      data = await dataforseo.lighthouse.live({ url, strategy });
+    }
 
     return {
       result: {
