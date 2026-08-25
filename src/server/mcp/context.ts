@@ -99,7 +99,6 @@ export function buildBillingCustomer(
 
 export function buildProjectMeta(
   context: {
-    auth: Pick<ToolAuthContext, "organizationId">;
     baseUrl: string;
   },
   projectId: string,
@@ -107,7 +106,6 @@ export function buildProjectMeta(
   params?: Record<string, string | number | undefined>,
 ) {
   return {
-    organizationId: context.auth.organizationId,
     projectId,
     url: path ? buildDashboardUrl(context.baseUrl, path, params) : undefined,
   };

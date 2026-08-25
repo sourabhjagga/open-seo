@@ -32,6 +32,9 @@ const MCP_CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 } as const;
 
+const SURFMIND_CHROME_EXTENSION_HOSTNAME = "pghallcbnfabbgfijhbcldaapmgidnaa";
+const SURFMIND_CHROME_EXTENSION_ORIGIN = `chrome-extension://${SURFMIND_CHROME_EXTENSION_HOSTNAME}`;
+
 function withMcpCors(response: Response) {
   const headers = new Headers(response.headers);
   for (const [name, value] of Object.entries(MCP_CORS_HEADERS)) {
@@ -111,11 +114,12 @@ async function handleLegacyJsonRequest(request: Request, props: McpProps) {
   }
 }
 
-// Hosted pins browser Origins to the configured base URL. Self-hosted leaves
-// the option unset so the handler's localhost-class default applies — an
-// allowlist derived from the request's own Host would accept a DNS-rebinding
-// page trivially. Non-browser MCP clients send no Origin and are unaffected
-// either way.
+// Hosted applies exact-origin validation before passing the corresponding
+// hostname allowlist to the SDK as defense in depth. Self-hosted leaves the
+// option unset so the handler's localhost-class default applies — an allowlist
+// derived from the request's own Host would accept a DNS-rebinding page
+// trivially. Non-browser MCP clients send no Origin and are unaffected either
+// way.
 function createRequestHandler(
   props: McpProps,
   allowedOriginHostnames?: string[],
@@ -156,8 +160,19 @@ export async function handleAuthenticatedOpenSeoMcpRequest(
     return new Response("MCP scope required", { status: 403 });
   }
 
+  const hostedUrl = new URL(getHostedBaseUrl());
+  const origin = request.headers.get("Origin");
+  if (
+    origin &&
+    origin !== hostedUrl.origin &&
+    origin !== SURFMIND_CHROME_EXTENSION_ORIGIN
+  ) {
+    return withMcpCors(new Response("Invalid Origin", { status: 403 }));
+  }
+
   return createRequestHandler(result.data, [
-    new URL(getHostedBaseUrl()).hostname,
+    hostedUrl.hostname,
+    SURFMIND_CHROME_EXTENSION_HOSTNAME,
   ])(request, env, ctx);
 }
 

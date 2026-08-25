@@ -792,7 +792,7 @@ export const getRankedKeywordsTool = {
       ...optionalMetaOutputSchema,
     },
     annotations: {
-      readOnlyHint: true,
+      readOnlyHint: false,
       openWorldHint: false,
       destructiveHint: false,
     },
@@ -871,7 +871,7 @@ export const searchLocalBusinessesTool = {
       ...optionalMetaOutputSchema,
     },
     annotations: {
-      readOnlyHint: true,
+      readOnlyHint: false,
       openWorldHint: false,
       destructiveHint: false,
     },
@@ -918,7 +918,7 @@ export const getLocalSerpResultsTool = {
       ...optionalMetaOutputSchema,
     },
     annotations: {
-      readOnlyHint: true,
+      readOnlyHint: false,
       openWorldHint: false,
       destructiveHint: false,
     },
@@ -964,7 +964,7 @@ export const getGoogleBusinessQuestionsTool = {
       ...optionalMetaOutputSchema,
     },
     annotations: {
-      readOnlyHint: true,
+      readOnlyHint: false,
       openWorldHint: false,
       destructiveHint: false,
     },
@@ -1007,7 +1007,7 @@ export const findSerpCompetitorsTool = {
       ...optionalMetaOutputSchema,
     },
     annotations: {
-      readOnlyHint: true,
+      readOnlyHint: false,
       openWorldHint: false,
       destructiveHint: false,
     },
@@ -1066,7 +1066,7 @@ export const getKeywordMetricsTool = {
       ...optionalMetaOutputSchema,
     },
     annotations: {
-      readOnlyHint: true,
+      readOnlyHint: false,
       openWorldHint: false,
       destructiveHint: false,
     },

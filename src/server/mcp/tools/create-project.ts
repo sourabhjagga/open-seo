@@ -77,7 +77,6 @@ export const createProjectTool = {
         project.domain ? ` (${project.domain})` : ""
       }  market:${project.locationCode}/${project.languageCode}`,
       meta: {
-        organizationId: auth.organizationId,
         url: buildDashboardUrl(baseUrl, `/p/${project.id}`),
       },
       structuredContent: {

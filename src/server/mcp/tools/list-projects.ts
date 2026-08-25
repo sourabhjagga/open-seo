@@ -46,7 +46,6 @@ export const listProjectsTool = {
     return mcpResponse({
       text: `Projects (${projects.length}):\n${lines.join("\n")}`,
       meta: {
-        organizationId: auth.organizationId,
         url: buildDashboardUrl(baseUrl, "/"),
       },
       structuredContent: {

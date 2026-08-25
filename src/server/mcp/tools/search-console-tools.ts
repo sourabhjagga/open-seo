@@ -214,7 +214,7 @@ export const getSearchConsolePerformanceTool = {
     },
     annotations: {
       readOnlyHint: true,
-      openWorldHint: true,
+      openWorldHint: false,
       destructiveHint: false,
     },
   },
@@ -350,7 +350,7 @@ export const inspectUrlsTool = {
     },
     annotations: {
       readOnlyHint: true,
-      openWorldHint: true,
+      openWorldHint: false,
       destructiveHint: false,
     },
   },

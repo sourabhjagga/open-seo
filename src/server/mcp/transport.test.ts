@@ -84,12 +84,13 @@ function createMcpRequest(headers?: Record<string, string>) {
 
 // The modern (2026-07-28) era is selected by the per-request `_meta` envelope
 // claim; without it every POST classifies as legacy traffic.
-function createModernMcpRequest() {
+function createModernMcpRequest(headers?: Record<string, string>) {
   return new Request("https://open-seo.test/mcp", {
     method: "POST",
     headers: {
       Accept: "application/json, text/event-stream",
       "Content-Type": "application/json",
+      ...headers,
     },
     body: JSON.stringify({
       jsonrpc: "2.0",
@@ -215,7 +216,10 @@ describe("handleAuthenticatedOpenSeoMcpRequest", () => {
     expect(response.headers.get("connection")).not.toBe("keep-alive");
     expect(selfHostedAuthMocks.createMcpHandler).toHaveBeenCalledWith(
       expect.objectContaining({
-        allowedOriginHostnames: ["open-seo.test"],
+        allowedOriginHostnames: [
+          "open-seo.test",
+          "pghallcbnfabbgfijhbcldaapmgidnaa",
+        ],
         legacy: "reject",
       }),
     );
@@ -241,6 +245,22 @@ describe("handleAuthenticatedOpenSeoMcpRequest", () => {
     expect(selfHostedAuthMocks.createOpenSeoMcpServer).not.toHaveBeenCalled();
   });
 
+  it("accepts a modern request from the exact SurfMind extension origin", async () => {
+    const props = hostedProps();
+
+    const response = await handleAuthenticatedOpenSeoMcpRequest(
+      createModernMcpRequest({
+        Origin: "chrome-extension://pghallcbnfabbgfijhbcldaapmgidnaa",
+      }),
+      props,
+      {},
+      { ...ctx, props },
+    );
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({ handledBy: "modern" });
+  });
+
   it("rejects a legacy request from a disallowed Origin", async () => {
     const props = hostedProps();
 
@@ -253,6 +273,46 @@ describe("handleAuthenticatedOpenSeoMcpRequest", () => {
 
     expect(response.status).toBe(403);
     expect(selfHostedAuthMocks.createOpenSeoMcpServer).not.toHaveBeenCalled();
+  });
+
+  it("accepts a legacy request from the SurfMind Chrome extension", async () => {
+    const props = hostedProps();
+
+    const response = await handleAuthenticatedOpenSeoMcpRequest(
+      createMcpRequest({
+        Origin: "chrome-extension://pghallcbnfabbgfijhbcldaapmgidnaa",
+      }),
+      props,
+      {},
+      { ...ctx, props },
+    );
+
+    expect(response.status).toBe(200);
+    expect(selfHostedAuthMocks.createOpenSeoMcpServer).toHaveBeenCalledWith(
+      props,
+    );
+  });
+
+  it.each([
+    [
+      "the SurfMind hostname over HTTPS",
+      "https://pghallcbnfabbgfijhbcldaapmgidnaa",
+    ],
+    [
+      "another Chrome extension",
+      "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    ],
+  ])("rejects a request from %s", async (_label, origin) => {
+    const props = hostedProps();
+
+    const response = await handleAuthenticatedOpenSeoMcpRequest(
+      createMcpRequest({ Origin: origin }),
+      props,
+      {},
+      { ...ctx, props },
+    );
+
+    expect(response.status).toBe(403);
   });
 
   it("rejects provider props missing the OAuth client identity", async () => {
