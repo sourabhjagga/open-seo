@@ -6,9 +6,9 @@ on:
     # Image builds from upstream source; deployment-file-only changes skip the
     # rebuild. Run manually (workflow_dispatch) for a fresh upstream build.
     paths-ignore:
-      - 'docker-compose.yaml'
-      - 'README.md'
-      - '.env.example'
+      - "docker-compose.yaml"
+      - "README.md"
+      - ".env.example"
   workflow_dispatch:
 
 jobs:
