@@ -20,7 +20,6 @@ jobs:
       # Build from the upstream source; this repo only holds deployment files.
       - name: Checkout upstream OpenSEO source
         uses: actions/checkout@v7
-        with:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
