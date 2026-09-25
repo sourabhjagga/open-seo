@@ -14,6 +14,7 @@ import { estimateRankTrackerCostTool } from "@/server/mcp/tools/estimate-rank-tr
 import { getRankTrackerTool } from "@/server/mcp/tools/get-rank-tracker";
 import { removeRankTrackingKeywordsTool } from "@/server/mcp/tools/remove-rank-tracking-keywords";
 import { runRankTrackerTool } from "@/server/mcp/tools/run-rank-tracker";
+import { searchSerpLocationsTool } from "@/server/mcp/tools/search-serp-locations";
 import { getSerpResultsTool } from "@/server/mcp/tools/get-serp-results";
 import {
   getAuditIssuesTool,
@@ -22,6 +23,7 @@ import {
   runSiteAuditTool,
 } from "@/server/mcp/tools/site-audit-tools";
 import { listSavedKeywordsTool } from "@/server/mcp/tools/list-saved-keywords";
+import { removeSavedKeywordsTool } from "@/server/mcp/tools/remove-saved-keywords";
 import { buildUpdateProjectContextTool } from "@/server/mcp/tools/project-context";
 import {
   getGoogleAnalyticsAudienceBreakdownTool,
@@ -362,6 +364,7 @@ export function buildSamMcpTools(
     // a read-only context block, so get_project_context would just re-fetch it.
     update_project_context: adaptTool(buildUpdateProjectContextTool("sam")),
     list_saved_keywords: adaptTool(listSavedKeywordsTool),
+    remove_saved_keywords: adaptTool(removeSavedKeywordsTool),
     research_keywords: adaptTool(researchKeywordsTool),
     save_keywords: adaptTool(saveKeywordsTool),
     get_domain_overview: adaptTool(getDomainOverviewTool),
@@ -369,6 +372,7 @@ export function buildSamMcpTools(
     get_backlinks_overview: adaptTool(getBacklinksOverviewTool),
     get_backlinks_profile: adaptTool(getBacklinksProfileTool),
     get_serp_results: adaptTool(getSerpResultsTool),
+    search_serp_locations: adaptTool(searchSerpLocationsTool),
     create_rank_tracker: adaptTool(createRankTrackerTool),
     get_rank_tracker: adaptTool(getRankTrackerTool),
     add_rank_tracking_keywords: adaptTool(addRankTrackingKeywordsTool),
