@@ -31,6 +31,9 @@ services:
       # Optional: AI features (SAM, the in-app SEO agent)
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
+      # Optional: site audit "Render JavaScript" (Docker has no browser,
+      # so the option stays disabled until this is set).
+      - CONTEXT_API_KEY=${CONTEXT_API_KEY:-}
       - VITE_SHOW_DEVTOOLS=false
     ports:
       - "${PORT:-3001}:${PORT:-3001}"
