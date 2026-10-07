@@ -12,10 +12,23 @@ import {
   resolveIssueSeverity,
 } from "@/client/features/audit/results/IssuesView";
 import { PagesTable } from "@/client/features/audit/results/PagesTable";
+import { ShopifyCrawlWarning } from "@/client/features/audit/results/ShopifyCrawlWarning";
+import { RenderingWarnings } from "@/client/features/audit/results/RenderingWarnings";
+import { PerformanceTable } from "@/client/features/audit/results/ResultsTables";
 import {
-  ExportDropdown,
-  PerformanceTable,
-} from "@/client/features/audit/results/ResultsTables";
+  BotProtectionAdvice,
+  SCORE_TEXT_CLASS,
+  scoreTone,
+  SeverityBadge,
+} from "@/client/features/audit/shared";
+import { ExportMenu } from "@/client/components/ExportMenu";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/client/components/ui/alert";
+import { DataTableTabs } from "@/client/components/table/DataTableToolbar";
+import { TabsTrigger } from "@/client/components/ui/tabs";
 
 type ResultsTab = "issues" | "pages" | "performance";
 
@@ -24,11 +37,14 @@ export function ResultsView({
   data,
   onTabChange,
   tab,
+  siteBlocked,
 }: {
   projectId: string;
   data: AuditResultsData;
   tab: string;
   onTabChange: (tab: ResultsTab) => void;
+  /** The page already says bot protection blocked the whole site. */
+  siteBlocked: boolean;
 }) {
   const { audit, pages, lighthouse, issues } = data;
   const crawlStopped = issues.some(
@@ -47,51 +63,75 @@ export function ResultsView({
     [pages],
   );
 
+  // Shopify's own crawler-access signature is a real fix for a throttled or
+  // refused crawl, so it replaces the generic advice for those stores.
+  const shopifyLimited =
+    audit.config.sitePlatform === "shopify" &&
+    (blockedCount > 0 || rateLimitedCount > 0 || crawlStopped);
+
+  const tabs = (
+    <ResultsHeader
+      issueCount={issues.length}
+      pageCount={pages.length}
+      lighthouseCount={lighthouse.length}
+      hasPerformanceTab={hasPerformanceTab}
+      activeTab={activeTab}
+      onTabChange={onTabChange}
+      onExport={(format) => {
+        if (activeTab === "performance") {
+          exportPerformance(lighthouse, pages, format);
+          return;
+        }
+        if (activeTab === "issues") {
+          exportIssues(issues, format);
+          return;
+        }
+        exportPages(pages, format);
+      }}
+    />
+  );
+
   return (
     <>
-      {blockedCount > 0 && (
-        <CrawlWarning
-          headline={`We were blocked on ${blockedCount} ${blockedCount === 1 ? "page" : "pages"}.`}
-        >
-          The site's bot protection challenged our crawler, so those pages
-          couldn't be audited. We don't have a workaround for this yet. Desktop
-          crawlers run from your own machine and usually get past it: try{" "}
-          <a
-            className="link link-primary"
-            href="https://github.com/PhialsBasement/LibreCrawl"
-            target="_blank"
-            rel="noreferrer"
-          >
-            LibreCrawl
-          </a>{" "}
-          (free, open source) or{" "}
-          <a
-            className="link link-primary"
-            href="https://www.screamingfrog.co.uk/seo-spider/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Screaming Frog
-          </a>{" "}
-          (free up to 500 URLs).
-        </CrawlWarning>
+      {shopifyLimited && (
+        <ShopifyCrawlWarning projectId={projectId} audit={audit} />
       )}
 
-      {(rateLimitedCount > 0 || crawlStopped) && (
-        <CrawlWarning
-          headline={
-            crawlStopped
-              ? "The crawl stopped early because of the site’s rate limit."
-              : `The site rate limited us on ${rateLimitedCount} ${rateLimitedCount === 1 ? "page" : "pages"}.`
-          }
-        >
-          {crawlStopped
-            ? "The requested cooldown exceeded the audit time limit, so some URLs were left unvisited. This report is incomplete. "
-            : "Pages that returned 429 Too Many Requests could not be audited. "}
-          Re-run the audit after the rate limit resets, or ask the site owner to
-          allow the "OpenSEO-Audit" crawler.
-        </CrawlWarning>
+      {!shopifyLimited && !siteBlocked && blockedCount > 0 && (
+        <Alert variant="warning">
+          <ShieldAlert />
+          <AlertTitle>
+            Bot protection blocked our crawler on {blockedCount}{" "}
+            {blockedCount === 1 ? "page" : "pages"}.
+          </AlertTitle>
+          <AlertDescription>
+            <BotProtectionAdvice
+              projectId={projectId}
+              rendered={audit.config.renderJavaScript === true}
+            />
+          </AlertDescription>
+        </Alert>
       )}
+
+      {!shopifyLimited && (rateLimitedCount > 0 || crawlStopped) && (
+        <Alert variant="warning">
+          <ShieldAlert />
+          <AlertTitle>
+            {crawlStopped
+              ? "The crawl stopped early because of the site’s rate limit."
+              : `The site rate limited us on ${rateLimitedCount} ${rateLimitedCount === 1 ? "page" : "pages"}.`}
+          </AlertTitle>
+          <AlertDescription>
+            {crawlStopped
+              ? "The requested cooldown exceeded the audit time limit, so some URLs were left unvisited. This report is incomplete. "
+              : "Pages that returned 429 Too Many Requests could not be audited. "}
+            Re-run the audit after the rate limit resets, or ask the site owner
+            to allow the "OpenSEO-Audit" crawler.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <RenderingWarnings data={data} />
 
       <StatsStrip
         pagesCrawled={audit.pagesCrawled}
@@ -101,66 +141,25 @@ export function ResultsView({
         lighthouseSummary={stats.lighthouseSummary}
       />
 
-      <div className="card bg-base-100 border border-base-300">
-        <div className="card-body gap-3">
-          <ResultsHeader
-            issueCount={issues.length}
-            pageCount={pages.length}
-            lighthouseCount={lighthouse.length}
-            hasPerformanceTab={hasPerformanceTab}
-            activeTab={activeTab}
-            onTabChange={onTabChange}
-            onExport={(format) => {
-              if (activeTab === "performance") {
-                exportPerformance(lighthouse, pages, format);
-                return;
-              }
-              if (activeTab === "issues") {
-                exportIssues(issues, format);
-                return;
-              }
-              exportPages(pages, format);
-            }}
-          />
-
-          {activeTab === "issues" && <IssuesView issues={issues} />}
-          {activeTab === "pages" && (
-            <PagesTable
-              pages={pages}
-              startUrl={audit.startUrl}
-              issues={issues}
-            />
-          )}
-          {activeTab === "performance" && lighthouse.length > 0 && (
-            <PerformanceTable
-              auditId={audit.id}
-              projectId={projectId}
-              lighthouse={lighthouse}
-              pages={pages}
-            />
-          )}
-        </div>
-      </div>
+      {activeTab === "issues" && <IssuesView issues={issues} tabs={tabs} />}
+      {activeTab === "pages" && (
+        <PagesTable
+          pages={pages}
+          startUrl={audit.startUrl}
+          issues={issues}
+          tabs={tabs}
+        />
+      )}
+      {activeTab === "performance" && (
+        <PerformanceTable
+          auditId={audit.id}
+          projectId={projectId}
+          lighthouse={lighthouse}
+          pages={pages}
+          tabs={tabs}
+        />
+      )}
     </>
-  );
-}
-
-/** Banner for pages the crawler could not read (bot protection, rate limits). */
-function CrawlWarning({
-  headline,
-  children,
-}: {
-  headline: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
-      <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" />
-      <p>
-        <span className="font-medium">{headline}</span>{" "}
-        <span className="text-base-content/70">{children}</span>
-      </p>
-    </div>
   );
 }
 
@@ -239,28 +238,22 @@ function ResultsHeader({
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-      <div role="tablist" className="tabs tabs-border w-fit">
-        {tabs.map(({ label, tab }) => {
-          const isActive = activeTab === tab;
-
-          return (
-            <button
-              key={tab}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              className={`tab ${isActive ? "tab-active" : ""}`}
-              onClick={() => onTabChange(tab)}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      <ExportDropdown onExport={onExport} />
-    </div>
+    <DataTableTabs
+      value={activeTab}
+      onValueChange={(value) => {
+        const next = tabs.find((item) => item.tab === value);
+        if (next) onTabChange(next.tab);
+      }}
+      actions={
+        <ExportMenu actions={["sheets", "csv", "json"]} onExport={onExport} />
+      }
+    >
+      {tabs.map(({ label, tab }) => (
+        <TabsTrigger key={tab} value={tab}>
+          {label}
+        </TabsTrigger>
+      ))}
+    </DataTableTabs>
   );
 }
 
@@ -304,13 +297,18 @@ function StatsStrip({
       value: String(issues.length),
       valueClass: issues.length === 0 ? "text-success" : "",
       sub: issues.length > 0 && (
-        <span className="flex items-center gap-2.5">
-          <SeverityCount count={severityCounts.critical} dotClass="bg-error" />
-          <SeverityCount count={severityCounts.warning} dotClass="bg-warning" />
-          <SeverityCount
-            count={severityCounts.info}
-            dotClass="bg-base-content/30"
-          />
+        <span className="flex flex-wrap items-center gap-1">
+          {(["critical", "warning", "info"] as const).map((severity) =>
+            severityCounts[severity] > 0 ? (
+              <SeverityBadge
+                key={severity}
+                severity={severity}
+                title={severity}
+              >
+                {severityCounts[severity]}
+              </SeverityBadge>
+            ) : null,
+          )}
         </span>
       ),
     },
@@ -348,7 +346,7 @@ function StatsStrip({
         label: "Lighthouse failures",
         value: String(lighthouseSummary.failed),
         valueClass:
-          lighthouseSummary.failed > 0 ? "text-error" : "text-success",
+          lighthouseSummary.failed > 0 ? "text-destructive" : "text-success",
       },
     );
   }
@@ -360,11 +358,11 @@ function StatsStrip({
 
   return (
     <div
-      className={`grid ${columnsClass} gap-px rounded-lg border border-base-300 bg-base-300/70 overflow-hidden`}
+      className={`grid ${columnsClass} gap-px rounded-lg border border-border bg-border overflow-hidden`}
     >
       {items.map((item) => (
-        <div key={item.label} className="bg-base-100 px-4 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-base-content/50">
+        <div key={item.label} className="bg-card px-4 py-3">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
             {item.label}
           </p>
           <p
@@ -373,7 +371,7 @@ function StatsStrip({
             {item.value}
           </p>
           {item.sub && (
-            <div className="text-xs text-base-content/60 mt-1">{item.sub}</div>
+            <div className="text-xs text-muted-foreground mt-1">{item.sub}</div>
           )}
         </div>
       ))}
@@ -381,25 +379,7 @@ function StatsStrip({
   );
 }
 
-function SeverityCount({
-  count,
-  dotClass,
-}: {
-  count: number;
-  dotClass: string;
-}) {
-  if (count === 0) return null;
-  return (
-    <span className="flex items-center gap-1 tabular-nums">
-      <span className={`size-1.5 rounded-full ${dotClass}`} />
-      {count}
-    </span>
-  );
-}
-
 function scoreClass(score: number | null) {
-  if (score == null) return "";
-  if (score >= 90) return "text-success";
-  if (score >= 50) return "text-warning";
-  return "text-error";
+  const tone = scoreTone(score);
+  return tone ? SCORE_TEXT_CLASS[tone] : "";
 }
