@@ -28,6 +28,9 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-}
+      # Optional: encrypts saved Shopify crawler signatures for site audits
+      # (32+ characters, distinct from BETTER_AUTH_SECRET).
+      - CRAWLER_ACCESS_SECRET=${CRAWLER_ACCESS_SECRET:-}
       # Optional: AI features (SAM, the in-app SEO agent)
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
