@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Configure git
         run: |
@@ -109,8 +109,4 @@ jobs:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           set -euo pipefail
-          git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
-          git config --local --unset-all http.extraHeader 2>/dev/null || true
-          git config --local credential.helper "" 2>/dev/null || true
-          git remote set-url origin "https://x-access-token:${GH_PAT}@github.com/sourabhjagga/open-seo.git"
-          git -c credential.helper= push origin main
+          git push "https://x-access-token:${GH_PAT}@github.com/sourabhjagga/open-seo.git" main
