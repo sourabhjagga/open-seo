@@ -110,5 +110,7 @@ jobs:
         run: |
           set -euo pipefail
           git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
+          git config --local --unset-all http.extraHeader 2>/dev/null || true
+          git config --local credential.helper "" 2>/dev/null || true
           git remote set-url origin "https://x-access-token:${GH_PAT}@github.com/sourabhjagga/open-seo.git"
-          git push origin main
+          git -c credential.helper= push origin main
