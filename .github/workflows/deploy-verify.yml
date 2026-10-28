@@ -1,0 +1,97 @@
+name: Deploy & Verify
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-verify
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Skip rollback commits
+        id: skip
+        run: |
+          if echo "${{ github.event.head_commit.message }}" | grep -q '\[skip ci\]'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Rollback commit detected - skipping deploy."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check required secrets
+        if: steps.skip.outputs.skip != 'true'
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          set -euo pipefail
+          if [ -z "$VPS_SSH_KEY" ]; then
+            echo "::error::Missing GitHub secret VPS_SSH_KEY (private SSH key for the VPS)."
+            exit 1
+          fi
+          if [ -z "$VPS_HOST" ]; then
+            echo "::error::Missing GitHub secret VPS_HOST (VPS hostname/IP)."
+            exit 1
+          fi
+          echo "Required secrets present."
+
+      - name: Set up SSH key
+        if: steps.skip.outputs.skip != 'true'
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > /tmp/vps_ssh_key
+          chmod 600 /tmp/vps_ssh_key
+          echo "SSH key written."
+
+      - name: Trigger deploy on VPS
+        if: steps.skip.outputs.skip != 'true'
+        id: deploy
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+          export VPS_SSH_KEY="$(cat /tmp/vps_ssh_key)"
+          export SSH_KEY_FILE=/tmp/vps_ssh_key
+          export VPS_HOST VPS_USER
+          bash .fork/ci-trigger-deploy.sh
+          echo "deploy_result=success" >> "$GITHUB_OUTPUT"
+
+      - name: Verify deployed version
+        if: steps.skip.outputs.skip != 'true' && success()
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          set -euo pipefail
+          # Best-effort: oc-deploy.sh already confirmed Coolify status 'finished'
+          # (which implies the healthcheck passed). Try the public app endpoint
+          # if reachable; warn (don't fail) if not.
+          if curl -s -m 10 -o /tmp/ready.json -w "%{http_code}" "http://${VPS_HOST}:3001/" | grep -q '^2'; then
+            echo "Health OK: $(cat /tmp/ready.json)"
+          else
+            echo "::warning::Could not reach ${VPS_HOST}:3001/ (app may not be publicly exposed). Relying on Coolify deployment status."
+          fi
+
+      - name: Report rollback (handled by oc-deploy.sh on VPS)
+        if: failure() && steps.skip.outputs.skip != 'true'
+        run: |
+          echo "::error::Deployment failed. oc-deploy.sh on the VPS already attempted rollback to the last good commit."
+          echo "Check the VPS logs and Coolify dashboard for details."
+          exit 1
