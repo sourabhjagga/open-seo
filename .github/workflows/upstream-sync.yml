@@ -109,5 +109,6 @@ jobs:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           set -euo pipefail
+          git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
           git remote set-url origin "https://x-access-token:${GH_PAT}@github.com/sourabhjagga/open-seo.git"
           git push origin main
