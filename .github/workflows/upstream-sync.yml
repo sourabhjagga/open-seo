@@ -12,7 +12,6 @@ on:
 
 permissions:
   contents: write
-  workflows: write
 
 concurrency:
   group: upstream-sync
@@ -106,4 +105,9 @@ jobs:
 
       - name: Push
         if: steps.sync.outputs.do_sync == 'true'
-        run: git push origin main
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+          git remote set-url origin "https://x-access-token:${GH_PAT}@github.com/sourabhjagga/open-seo.git"
+          git push origin main
