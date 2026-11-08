@@ -88,8 +88,8 @@ vi.mock("@/server/lib/dataforseo/labs", () => ({
   fetchSerpCompetitors: vi.fn(),
 }));
 vi.mock("@/server/lib/dataforseo/serp", () => ({
-  fetchLiveSerp: vi.fn(),
-  fetchRankCheckSerp: vi.fn(),
+  postSerpReadTasks: vi.fn(),
+  SERP_READS_PER_QUERY: 3,
   postRankCheckTasks: vi.fn(),
   fetchLocalSerp: vi.fn(),
   postLocalSerpTasks: vi.fn(),
@@ -139,7 +139,7 @@ import { dataforseoPricing } from "@/server/lib/dataforseo/pricing";
 import { DataforseoChargedTaskError } from "@/server/lib/dataforseo/envelope";
 import { AppError } from "@/server/lib/errors";
 import { fetchBacklinksSummary } from "@/server/lib/dataforseo/backlinks";
-import { fetchRankCheckSerp } from "@/server/lib/dataforseo/serp";
+import { postSerpReadTasks } from "@/server/lib/dataforseo/serp";
 import { postAiTrackingTasks } from "@/server/lib/dataforseo/ai-tracking";
 
 const billingCustomer = {
@@ -264,12 +264,13 @@ describe("meterDataforseoCall", () => {
     });
   });
 
-  it("releases the hold for an unbilled invalid-field failure and throws VALIDATION_ERROR", async () => {
+  it("releases the hold for an unbilled invalid-field failure, logs the field but not its value, and throws VALIDATION_ERROR", async () => {
     setupHostedMode();
     mockMonthlyBalance(5000);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.mocked(fetchBacklinksSummary).mockRejectedValue(
       new DataforseoChargedTaskError(
-        "Invalid Field: 'target'.",
+        `Invalid Field: 'target'. (sent target="customer.example")`,
         { costUsd: 0, path: backlinksPath },
         true,
       ),
@@ -281,6 +282,12 @@ describe("meterDataforseoCall", () => {
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
 
     expect(finalizeMock.mock.calls[0][0]).toMatchObject({ action: "release" });
+    expect(warn).toHaveBeenCalledWith("dataforseo.invalid-field", {
+      event: "dataforseo.invalid-field",
+      path: "/v3/backlinks/summary/live",
+      field: "target",
+    });
+    warn.mockRestore();
   });
 
   it("releases the hold when the provider call fails before billing", async () => {
@@ -357,39 +364,31 @@ describe("AI visibility queued posts", () => {
   });
 });
 
-describe("rankCheckBatch", () => {
+describe("readsTaskPostBatch", () => {
   const input = {
     keyword: "running shoes",
-    keywordId: "kw_1",
     locationCode: 2840,
     languageCode: "en",
     device: "desktop" as const,
-    targetDomain: "example.com",
     depth: 10,
   };
   const callEstimate = creditsForProviderUsd(
-    dataforseoPricing.serp.rankCheck(input),
+    dataforseoPricing.serp.readsTaskPost(input),
   );
   // 2 * ceil(1.28) = 4 credits for two calls, not ceil(2.56) = 3 for their
   // summed cost: each call is credited as it would be unbatched.
   const billed = {
-    data: {
-      keywordId: "kw_1",
-      keyword: "running shoes",
-      position: 3,
-      url: null,
-      serpFeatures: [],
-    },
+    data: ["task-1", "task-2", "task-3"],
     billing: {
       costUsd: 0.001,
-      path: ["v3", "serp", "google", "organic", "live", "advanced"],
+      path: ["v3", "serp", "google", "organic", "task_post"],
     },
   };
 
   it("bills the batch with one hold on the summed estimate and one confirm on the billed calls", async () => {
     setupHostedMode();
     mockMonthlyBalance(5000);
-    vi.mocked(fetchRankCheckSerp)
+    vi.mocked(postSerpReadTasks)
       .mockResolvedValueOnce(billed)
       .mockRejectedValueOnce(
         new AppError("UPSTREAM_UNAVAILABLE", "DataForSEO timed out"),
@@ -397,7 +396,7 @@ describe("rankCheckBatch", () => {
       .mockResolvedValueOnce(billed);
 
     const client = createDataforseoClient(billingCustomer);
-    const settled = await client.serp.rankCheckBatch([input, input, input]);
+    const settled = await client.serp.readsTaskPostBatch([input, input, input]);
 
     expect(settled.map((outcome) => outcome.status)).toEqual([
       "fulfilled",
@@ -428,10 +427,10 @@ describe("rankCheckBatch", () => {
         balance: { remaining: balance },
       };
     });
-    vi.mocked(fetchRankCheckSerp).mockResolvedValue(billed);
+    vi.mocked(postSerpReadTasks).mockResolvedValue(billed);
 
     const client = createDataforseoClient(billingCustomer);
-    const settled = await client.serp.rankCheckBatch([input, input, input]);
+    const settled = await client.serp.readsTaskPostBatch([input, input, input]);
 
     expect(settled.every((outcome) => outcome.status === "fulfilled")).toBe(
       true,

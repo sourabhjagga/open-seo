@@ -11,6 +11,7 @@ import {
   DataforseoChargedTaskError,
   type DataforseoApiCallCost,
   type DataforseoApiResponse,
+  invalidFieldName,
 } from "@/server/lib/dataforseo/envelope";
 import { dataforseoPricing } from "@/server/lib/dataforseo/pricing";
 import {
@@ -42,10 +43,10 @@ import {
   fetchAdsSearchVolume,
 } from "@/server/lib/dataforseo/google-ads";
 import {
-  fetchLiveSerp,
   fetchLocalSerp,
-  fetchRankCheckSerp,
   postLocalSerpTasks,
+  postSerpReadTasks,
+  type SerpQuery,
   postRankCheckTasks,
 } from "@/server/lib/dataforseo/serp";
 import { fetchLighthouseResult } from "@/server/lib/dataforseo/lighthouse";
@@ -216,35 +217,18 @@ export function createDataforseoClient(customer: BillingCustomerContext) {
       ),
     },
     serp: {
-      live: meter(
-        customer,
-        fetchLiveSerp,
-        dataforseoPricing.serp.live,
-        "keyword_research",
-      ),
-      // Settles only after every live SERP has answered: a Worker request
-      // queues its 7th fetch still waiting for response headers, so a per-call
-      // settle sent while other live SERPs are still running can time out
-      // before it reaches Autumn. Resolves per call, in order.
-      liveBatch: (inputs: Parameters<typeof fetchLiveSerp>[0][]) =>
+      // Posts each query's reads; one credit hold covers the batch, and each
+      // query is placed and refused as its own hold would be (see
+      // meterDataforseoCalls). DataForSEO bills task_post, collection is free.
+      // Resolves per query, in order.
+      readsTaskPostBatch: (inputs: SerpQuery[]) =>
         meterDataforseoCalls(
           customer,
-          inputs.map((input) => () => fetchLiveSerp(input)),
+          inputs.map((input) => () => postSerpReadTasks(input)),
           inputs.map((input) =>
-            creditsForProviderUsd(dataforseoPricing.serp.live(input)),
+            creditsForProviderUsd(dataforseoPricing.serp.readsTaskPost(input)),
           ),
           "keyword_research",
-        ),
-      // A rank check batch shares one credit hold and one settle across its
-      // live calls (see meterDataforseoCalls). Resolves per call, in order.
-      rankCheckBatch: (inputs: Parameters<typeof fetchRankCheckSerp>[0][]) =>
-        meterDataforseoCalls(
-          customer,
-          inputs.map((input) => () => fetchRankCheckSerp(input)),
-          inputs.map((input) =>
-            creditsForProviderUsd(dataforseoPricing.serp.rankCheck(input)),
-          ),
-          "rank_tracking",
         ),
       // Posts up to 100 queued rank check tasks; one metered charge covers the
       // whole batch (DataForSEO bills task_post at post time, collection is
@@ -425,6 +409,13 @@ async function meterDataforseoCalls<T>(
           // DataForSEO still billed us (costUsd > 0), charge that cost so the
           // spend stays metered and visible instead of silently eaten.
           if (error.isInvalidField && error.billing.costUsd <= 0) {
+            // Non-reportable, so this is the only record. The field name, not
+            // the message, which quotes the value that was sent.
+            console.warn("dataforseo.invalid-field", {
+              event: "dataforseo.invalid-field",
+              path: `/${error.billing.path.join("/")}`,
+              field: invalidFieldName(error.message),
+            });
             throw new AppError("VALIDATION_ERROR", error.message);
           }
           billed[index] = error.billing;

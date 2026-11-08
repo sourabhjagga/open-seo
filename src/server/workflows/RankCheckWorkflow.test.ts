@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowStep } from "cloudflare:workers";
+import { AUTUMN_SEO_DATA_BALANCE_FEATURE_ID } from "@/shared/billing";
 import { RankCheckWorkflow } from "./RankCheckWorkflow";
 
 const mocks = vi.hoisted(() => ({
@@ -13,10 +14,11 @@ const mocks = vi.hoisted(() => ({
   resolveGotoUrls: vi.fn(),
   autumnCheck: vi.fn(),
   createDataforseoClient: vi.fn(),
-  runLiveCheck: vi.fn(),
+  runQueuedCheck: vi.fn(),
   failRunIfActive: vi.fn(),
   captureServerEvent: vi.fn(),
   isHostedServerAuthMode: vi.fn(),
+  sendCreditsExhaustedEvent: vi.fn(),
 }));
 
 vi.mock("cloudflare:workers", () => ({
@@ -34,8 +36,10 @@ vi.mock("@/server/features/rank-tracking/services/rankCheckRunGuards", () => ({
   failRunIfActive: mocks.failRunIfActive,
 }));
 vi.mock("@/server/workflows/rankCheckPaths", () => ({
-  runLiveCheck: mocks.runLiveCheck,
-  runQueuedCheck: vi.fn(),
+  runQueuedCheck: mocks.runQueuedCheck,
+}));
+vi.mock("@/server/workflows/rankCheckRetries", () => ({
+  READ_WINDOW_MS: 0,
   retryRankChecks: vi.fn(),
 }));
 vi.mock("@/server/workflows/pgStep", () => ({
@@ -71,7 +75,7 @@ vi.mock("@/server/lib/runtime-env", () => ({
   isHostedServerAuthMode: mocks.isHostedServerAuthMode,
 }));
 vi.mock("@/server/email/onboarding-drip", () => ({
-  sendCreditsExhaustedEvent: vi.fn(),
+  sendCreditsExhaustedEvent: mocks.sendCreditsExhaustedEvent,
 }));
 
 const billingCustomer = {
@@ -127,19 +131,22 @@ describe("rank check workflow credit ceiling", () => {
     mocks.getConfigById.mockResolvedValue({ isActive: true });
     mocks.getRunById.mockResolvedValue(activeRun);
     mocks.getSnapshotsForRun.mockResolvedValue([]);
-    mocks.updateRun.mockResolvedValue(undefined);
+    mocks.updateRun.mockResolvedValue(true);
     mocks.isHostedServerAuthMode.mockResolvedValue(true);
-    mocks.autumnCheck.mockResolvedValue({ balance: { remaining: 1_000 } });
+    mocks.autumnCheck.mockResolvedValue({
+      allowed: true,
+      balance: { remaining: 1_000 },
+    });
   });
 
   it("rejects a keyword-list race before balance or DataForSEO calls", async () => {
-    mocks.getKeywordsForConfig.mockResolvedValue(keywords(5));
+    mocks.getKeywordsForConfig.mockResolvedValue(keywords(4));
 
-    await expect(runWorkflow({ maxCostCredits: 20 })).rejects.toThrow();
+    await expect(runWorkflow({ maxCostCredits: 18 })).rejects.toThrow();
 
     expect(mocks.autumnCheck).not.toHaveBeenCalled();
     expect(mocks.createDataforseoClient).not.toHaveBeenCalled();
-    expect(mocks.runLiveCheck).not.toHaveBeenCalled();
+    expect(mocks.runQueuedCheck).not.toHaveBeenCalled();
   });
 
   it("keeps a credits refusal as the bare code, so the credits card shows", async () => {
@@ -155,13 +162,46 @@ describe("rank check workflow credit ceiling", () => {
     expect(mocks.updateConfig).toHaveBeenCalledWith("config_1", "project_1", {
       lastSkipReason: "insufficient_credits",
     });
+    expect(mocks.sendCreditsExhaustedEvent).toHaveBeenCalled();
+  });
+
+  it("refuses without the credits email when the auto-reload budget holds back top-up credits", async () => {
+    mocks.getKeywordsForConfig.mockResolvedValue(keywords(5));
+    mocks.autumnCheck.mockImplementation(
+      async ({ featureId }: { featureId: string }) =>
+        featureId === AUTUMN_SEO_DATA_BALANCE_FEATURE_ID
+          ? { allowed: false, balance: { remaining: 0 } }
+          : { allowed: false, balance: { remaining: 12_000 } },
+    );
+
+    await expect(runWorkflow({})).rejects.toThrow("INSUFFICIENT_CREDITS");
+
+    expect(mocks.failRunIfActive).toHaveBeenCalledWith(
+      "run_1",
+      "INSUFFICIENT_CREDITS",
+    );
+    expect(mocks.sendCreditsExhaustedEvent).not.toHaveBeenCalled();
+  });
+
+  it("does not refuse as out of credits when an Autumn read fails open", async () => {
+    mocks.getKeywordsForConfig.mockResolvedValue(keywords(5));
+    // The SDK's response to a timed-out check.
+    mocks.autumnCheck.mockResolvedValue({ allowed: true, balance: null });
+
+    await expect(runWorkflow({})).rejects.toThrow("no usage_credits balance");
+
+    expect(mocks.failRunIfActive).not.toHaveBeenCalledWith(
+      "run_1",
+      "INSUFFICIENT_CREDITS",
+    );
+    expect(mocks.updateConfig).not.toHaveBeenCalled();
   });
 
   // Exactly at the ceiling is approved (the guard is strictly greater), and
   // callers without a ceiling — every scheduled check — must not be treated
   // as approving zero credits.
   it.each([
-    ["at the approved ceiling", 20, 4],
+    ["at the approved ceiling", 18, 3],
     ["without a ceiling", undefined, 5],
   ])("checks the reloaded list %s", async (_label, maxCostCredits, count) => {
     mocks.getKeywordsForConfig.mockResolvedValue(keywords(count));
@@ -171,7 +211,7 @@ describe("rank check workflow credit ceiling", () => {
     expect(mocks.updateRun).toHaveBeenCalledWith("run_1", {
       keywordsTotal: count,
     });
-    expect(mocks.runLiveCheck).toHaveBeenCalledWith(
+    expect(mocks.runQueuedCheck).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ keywords: keywords(count) }),
     );
@@ -181,29 +221,45 @@ describe("rank check workflow credit ceiling", () => {
 describe("rank check finalization", () => {
   beforeEach(() => {
     mocks.getConfigById.mockResolvedValue({ isActive: true });
-    mocks.getRunById.mockResolvedValue({
-      ...activeRun,
-      keywordsTotal: 3,
-      // Recorded by the batch step on the first rejected keyword.
-      errorMessage: "Invalid Field: 'location_name'.",
-    });
+    mocks.getRunById.mockResolvedValue({ ...activeRun, keywordsTotal: 3 });
     mocks.getKeywordsForConfig.mockResolvedValue(keywords(3));
     mocks.getSnapshotsForRun.mockResolvedValue([]);
-    mocks.updateRun.mockResolvedValue(undefined);
+    mocks.updateRun.mockResolvedValue(true);
     mocks.isHostedServerAuthMode.mockResolvedValue(true);
-    mocks.autumnCheck.mockResolvedValue({ balance: { remaining: 1_000 } });
+    mocks.autumnCheck.mockResolvedValue({
+      allowed: true,
+      balance: { remaining: 1_000 },
+    });
   });
 
-  it("fails a run where no keyword produced a snapshot, keeping the recorded reason", async () => {
+  it("fails a run where no keyword produced a snapshot", async () => {
     await runWorkflow({});
 
     expect(mocks.updateRun).toHaveBeenCalledWith(
       "run_1",
       expect.objectContaining({
         status: "failed",
-        errorMessage: "Invalid Field: 'location_name'.",
+        errorMessage: "No keywords could be checked.",
       }),
     );
+    expect(mocks.updateConfig).not.toHaveBeenCalled();
+  });
+
+  it("keeps the failure when stale cleanup fails the run before it finalizes", async () => {
+    mocks.getSnapshotsForRun.mockResolvedValue(
+      keywords(3).map((kw) => ({
+        trackingKeywordId: kw.id,
+        device: "desktop",
+      })),
+    );
+    // The run is active until the finalize write, which finds it failed.
+    mocks.updateRun.mockImplementation(
+      async (_id: string, data: { status?: string }) =>
+        data.status !== "completed",
+    );
+
+    await runWorkflow({});
+
     expect(mocks.updateConfig).not.toHaveBeenCalled();
   });
 
@@ -223,39 +279,13 @@ describe("rank check finalization", () => {
         status: "completed",
         keywordsChecked: 3,
         errorMessage:
-          'Checked 3 of 3 desktop and 0 of 3 mobile keyword(s): Invalid Field: \'location_name\'. Not checked: "keyword 0" (mobile), "keyword 1" (mobile), "keyword 2" (mobile).',
-      }),
-    );
-  });
-
-  it("leaves a bare error code out of a partial run's message", async () => {
-    mocks.getRunById.mockResolvedValue({
-      ...activeRun,
-      keywordsTotal: 2,
-      errorMessage: "UPSTREAM_UNAVAILABLE",
-    });
-    mocks.getKeywordsForConfig.mockResolvedValue(keywords(2));
-    mocks.getSnapshotsForRun.mockResolvedValue([
-      { trackingKeywordId: "kw_0", device: "desktop" },
-    ]);
-
-    await runWorkflow({});
-
-    expect(mocks.updateRun).toHaveBeenCalledWith(
-      "run_1",
-      expect.objectContaining({
-        status: "completed",
-        errorMessage: 'Checked 1 of 2 keyword(s). Not checked: "keyword 1".',
+          'Checked 3 of 3 desktop and 0 of 3 mobile keyword(s). Not checked: "keyword 0" (mobile), "keyword 1" (mobile), "keyword 2" (mobile).',
       }),
     );
   });
 
   it("names the keywords a partial run could not check", async () => {
-    mocks.getRunById.mockResolvedValue({
-      ...activeRun,
-      keywordsTotal: 12,
-      errorMessage: "Internal SE Server Error.",
-    });
+    mocks.getRunById.mockResolvedValue({ ...activeRun, keywordsTotal: 12 });
     mocks.getKeywordsForConfig.mockResolvedValue(keywords(12));
     mocks.getSnapshotsForRun.mockResolvedValue([
       { trackingKeywordId: "kw_0", device: "desktop" },
@@ -267,7 +297,7 @@ describe("rank check finalization", () => {
       "run_1",
       expect.objectContaining({
         status: "completed",
-        errorMessage: `Checked 1 of 12 keyword(s): Internal SE Server Error. Not checked: "keyword 1", "keyword 2", "keyword 3", "keyword 4", "keyword 5", "keyword 6", "keyword 7", "keyword 8", "keyword 9", "keyword 10" and 1 more.`,
+        errorMessage: `Checked 1 of 12 keyword(s). Not checked: "keyword 1", "keyword 2", "keyword 3", "keyword 4", "keyword 5", "keyword 6", "keyword 7", "keyword 8", "keyword 9", "keyword 10" and 1 more.`,
       }),
     );
   });
@@ -287,9 +317,12 @@ describe("rank check goto URLs", () => {
     mocks.getConfigById.mockResolvedValue({ isActive: true });
     mocks.getRunById.mockResolvedValue({ ...activeRun, keywordsTotal: 1 });
     mocks.getKeywordsForConfig.mockResolvedValue(keywords(1));
-    mocks.updateRun.mockResolvedValue(undefined);
+    mocks.updateRun.mockResolvedValue(true);
     mocks.isHostedServerAuthMode.mockResolvedValue(true);
-    mocks.autumnCheck.mockResolvedValue({ balance: { remaining: 1_000 } });
+    mocks.autumnCheck.mockResolvedValue({
+      allowed: true,
+      balance: { remaining: 1_000 },
+    });
     mocks.resolveGotoUrls.mockResolvedValue(new Map());
   });
 
