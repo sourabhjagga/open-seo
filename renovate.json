@@ -1,0 +1,26 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "forkProcessing": "enabled",
+  "dependencyDashboard": true,
+  "minimumReleaseAge": "3 days",
+  "separateMajorMinor": true,
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Majors are never auto-merged; a human reads the release notes first.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "review-major"]
+    },
+    {
+      "description": "Minor and patch bumps are proposed but merged by hand.",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": false
+    }
+  ]
+}
