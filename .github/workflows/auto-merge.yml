@@ -1,0 +1,80 @@
+name: Auto-merge
+
+# Merges a bot pull request once its checks are green, using a personal access
+# token. A merge made with the default GITHUB_TOKEN does not start the deploy
+# pipeline, so the token is what makes this end to end: green checks, merge,
+# then the push runs build and deploy.
+#
+# Guards, in order:
+#   - only a pull_request run that succeeded
+#   - only a branch named renovate/*
+#   - never a pull request carrying the review-major label
+#   - re-check the pull request's own checks, and require at least one
+#   - never touch a pull request that has no checks at all
+#
+# Anything that fails a guard is left alone for a human.
+
+on:
+  workflow_run:
+    workflows: ["pr checks"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: auto-merge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Merge if it is a clean renovate pull request
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::GH_PAT is not set, auto-merge is disabled"
+            exit 0
+          fi
+
+          read -r NUMBER HEAD_REF < <(gh pr list --repo "$REPO" --state open \
+            --search "$SHA" --json number,headRefName \
+            --jq '.[0] | "\(.number) \(.headRefName)"' 2>/dev/null || true)
+
+          if [ -z "${NUMBER:-}" ]; then
+            echo "no open pull request for $SHA, nothing to do"
+            exit 0
+          fi
+
+          echo "pull request #$NUMBER on branch $HEAD_REF"
+
+          case "$HEAD_REF" in
+            renovate/*) ;;
+            *) echo "not a renovate branch, leaving it to a human"; exit 0 ;;
+          esac
+
+          labels="$(gh pr view "$NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | join(",")')"
+          case ",$labels," in
+            *,review-major,*) echo "marked review-major, leaving it to a human"; exit 0 ;;
+          esac
+
+          # Require at least one check, and every one of them green.
+          if ! gh pr checks "$NUMBER" --repo "$REPO" >/tmp/checks.txt 2>&1; then
+            echo "checks are not all green, or there are none:"
+            cat /tmp/checks.txt
+            exit 0
+          fi
+          cat /tmp/checks.txt
+
+          gh pr merge "$NUMBER" --repo "$REPO" --squash --delete-branch
+          echo "merged #$NUMBER; the push will run build and deploy"
