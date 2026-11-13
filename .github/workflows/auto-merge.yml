@@ -32,7 +32,7 @@ jobs:
   merge:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
     steps:
       - name: Merge if it is a clean renovate pull request
         env:
@@ -71,7 +71,7 @@ jobs:
           # Wait for every check on this pull request to reach a conclusion.
           # This workflow fires when "pr checks" finishes, but the repository's
           # own CI usually runs longer, so merging immediately would race it.
-          deadline=$(( $(date +%s) + 1800 ))
+          deadline=$(( $(date +%s) + 2700 ))
           while :; do
             if gh pr checks "$NUMBER" --repo "$REPO" >/tmp/checks.txt 2>&1; then
               break
