@@ -68,28 +68,44 @@ jobs:
             *,review-major,*) echo "marked review-major, leaving it to a human"; exit 0 ;;
           esac
 
-          # Wait for every check on this pull request to reach a conclusion.
-          # This workflow fires when "pr checks" finishes, but the repository's
-          # own CI usually runs longer, so merging immediately would race it.
+          # Wait for the checks that decide whether the change is sound.
+          #
+          # This workflow fires when "pr checks" ends, but the repository's own
+          # CI usually runs longer, so merging at once would race it. Release
+          # workflows (desktop installers and the like) are excluded: they take
+          # the better part of an hour, they do not gate correctness, and
+          # waiting for them would mean nothing ever merged.
+          skip_workflows="Desktop release"
           deadline=$(( $(date +%s) + 2700 ))
           while :; do
-            if gh pr checks "$NUMBER" --repo "$REPO" >/tmp/checks.txt 2>&1; then
+            if ! json="$(gh pr checks "$NUMBER" --repo "$REPO" --json name,state,workflow 2>/dev/null)"; then
+              echo "could not read the checks, leaving it to a human"
+              exit 0
+            fi
+            if [ "$(printf '%s' "$json" | jq 'length')" = "0" ]; then
+              echo "this pull request has no checks at all, leaving it to a human"
+              exit 0
+            fi
+            pending="$(printf '%s' "$json" | jq --arg skip "$skip_workflows" \
+              '[.[] | select(.workflow != $skip) | select(.state == "PENDING" or .state == "QUEUED" or .state == "IN_PROGRESS")] | length' 2>/dev/null || echo 0)"
+            failing="$(printf '%s' "$json" | jq --arg skip "$skip_workflows" \
+              '[.[] | select(.workflow != $skip) | select(.state != "SUCCESS" and .state != "SKIPPED" and .state != "NEUTRAL" and .state != "PENDING" and .state != "QUEUED" and .state != "IN_PROGRESS")] | length' 2>/dev/null || echo 1)"
+            if [ "${failing:-1}" != "0" ]; then
+              echo "a check has failed:"
+              printf '%s' "$json" | jq -r '.[] | select(.workflow != "'"$skip_workflows"'") | "  \(.workflow) / \(.name): \(.state)"'
+              exit 0
+            fi
+            if [ "${pending:-1}" = "0" ]; then
+              echo "all checks are green:"
+              printf '%s' "$json" | jq -r '.[] | select(.workflow != "'"$skip_workflows"'") | "  \(.workflow) / \(.name): \(.state)"'
               break
             fi
-            if grep -qiE "pending|in_progress|queued|waiting" /tmp/checks.txt; then
-              if [ "$(date +%s)" -ge "$deadline" ]; then
-                echo "checks still pending after 30 minutes, leaving it"
-                cat /tmp/checks.txt
-                exit 0
-              fi
-              sleep 30
-              continue
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "checks still pending after 45 minutes, leaving it"
+              exit 0
             fi
-            echo "a check has failed or there are none:"
-            cat /tmp/checks.txt
-            exit 0
+            sleep 30
           done
-          cat /tmp/checks.txt
 
           gh pr merge "$NUMBER" --repo "$REPO" --squash --delete-branch
           echo "merged #$NUMBER; the push will run build and deploy"
