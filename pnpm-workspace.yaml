@@ -57,6 +57,8 @@ minimumReleaseAgeExclude:
   - "@distilled.cloud/*"
   # Renovate security update: fast-xml-parser@5.12.0
   - fast-xml-parser@5.12.0
+  # Renovate security update: sharp@0.35.5
+  - sharp@0.35.5
 
 # Security floors for transitive dependencies with published advisories.
 # Overrides outside a parent's declared range are scoped and noted below. Ranges are
@@ -98,7 +100,7 @@ overrides:
   # GHSA-67mh-4wv8-2f99 — update drizzle-kit's legacy loader instead of ignoring it.
   "@esbuild-kit/core-utils>esbuild": "^0.25.12"
   # GHSA-rgj7-g3m4-5g8c — Miniflare 4 pins 0.34.5; 0.35.4 fixes bundled libheif.
-  "miniflare>sharp": "0.35.4"
+  "miniflare>sharp": "0.35.5"
   # September 2026 advisories: keep these fixes within each supported major.
   "@ai-sdk/provider-utils@4": "^4.0.33"
   "@hono/node-server@1": "^1.19.15"
