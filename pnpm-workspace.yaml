@@ -55,6 +55,8 @@ minimumReleaseAgeExclude:
   # the window. Exact-pinned in package.json.
   - "alchemy"
   - "@distilled.cloud/*"
+  # Renovate security update: fast-xml-parser@5.12.0
+  - fast-xml-parser@5.12.0
 
 # Security floors for transitive dependencies with published advisories.
 # Overrides outside a parent's declared range are scoped and noted below. Ranges are
