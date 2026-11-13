@@ -68,12 +68,27 @@ jobs:
             *,review-major,*) echo "marked review-major, leaving it to a human"; exit 0 ;;
           esac
 
-          # Require at least one check, and every one of them green.
-          if ! gh pr checks "$NUMBER" --repo "$REPO" >/tmp/checks.txt 2>&1; then
-            echo "checks are not all green, or there are none:"
+          # Wait for every check on this pull request to reach a conclusion.
+          # This workflow fires when "pr checks" finishes, but the repository's
+          # own CI usually runs longer, so merging immediately would race it.
+          deadline=$(( $(date +%s) + 1800 ))
+          while :; do
+            if gh pr checks "$NUMBER" --repo "$REPO" >/tmp/checks.txt 2>&1; then
+              break
+            fi
+            if grep -qiE "pending|in_progress|queued|waiting" /tmp/checks.txt; then
+              if [ "$(date +%s)" -ge "$deadline" ]; then
+                echo "checks still pending after 30 minutes, leaving it"
+                cat /tmp/checks.txt
+                exit 0
+              fi
+              sleep 30
+              continue
+            fi
+            echo "a check has failed or there are none:"
             cat /tmp/checks.txt
             exit 0
-          fi
+          done
           cat /tmp/checks.txt
 
           gh pr merge "$NUMBER" --repo "$REPO" --squash --delete-branch
