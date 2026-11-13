@@ -20,6 +20,8 @@ minimumReleaseAgeExclude:
   - "@tanstack/start-server-core@1.169.39"
   - "@tanstack/start-storage-context@1.167.36"
   - "@tanstack/store@0.11.2"
+  # Renovate security update: vite@7.3.7
+  - vite@7.3.7
 
 # Security floors for transitive dependencies; keep compatible majors.
 overrides:
