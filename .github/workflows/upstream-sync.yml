@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: "Force sync even if the latest release is < 96h old"
+        description: "Force sync even if the latest eligible release is < 48h old"
         type: boolean
         default: false
 
@@ -67,12 +67,32 @@ jobs:
         id: tag
         run: |
           set -euo pipefail
-          TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+          # Pick the newest upstream v* tag that is at least ${SOAK_HOURS}h old
+          # (sorted newest first). A brand-new release (< soak window) is skipped
+          # in favour of the previous one, so a failed/half-baked latest tag
+          # never blocks the fork. If every tag is still inside the window we
+          # take the newest anyway so the fork can never get stuck.
+          SOAK_HOURS="${SOAK_HOURS:-48}"
+          NOW=$(date +%s)
+          TAG=""
+          while read -r T; do
+            [ -z "$T" ] && continue
+            T_DATE=$(git log -1 --format=%ct "$T" 2>/dev/null || echo 0)
+            T_AGE=$(( NOW - T_DATE ))
+            echo "candidate $T age=$((T_AGE/3600))h"
+            if [ "$T_AGE" -ge $(( SOAK_HOURS * 3600 )) ]; then
+              TAG="$T"
+              break
+            fi
+          done < <(git tag -l 'v*' --sort=-v:refname)
+          if [ -z "$TAG" ]; then
+            TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+          fi
           if [ -z "$TAG" ]; then
             echo "No upstream v* tags found"; exit 1
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Latest upstream tag: $TAG"
+          echo "Selected upstream tag: $TAG"
 
       - name: Sync (merge + reconcile + commit)
         id: sync
@@ -91,9 +111,9 @@ jobs:
           now=$(date +%s)
           age=$((now - tag_date))
           echo "Tag $TAG age: $((age/3600))h"
-          if [ "$FORCE" != "true" ] && [ "$age" -lt 345600 ]; then
+          if [ "$FORCE" != "true" ] && [ "$age" -lt 172800 ]; then
             echo "do_sync=false" >> "$GITHUB_OUTPUT"
-            echo "Release is < 96h old, waiting for it to age."
+            echo "Release is < 48h old, waiting for it to age."
             exit 0
           fi
 
