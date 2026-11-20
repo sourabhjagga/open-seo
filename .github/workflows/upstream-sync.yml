@@ -99,6 +99,12 @@ jobs:
             git diff --name-only --diff-filter=U | grep '^\.github/workflows/' | while read -r f; do
               git rm -f -- "$f"
             done
+            # Lockfile conflicts: take upstream version and regenerate
+            git diff --name-only --diff-filter=U | grep -E 'pnpm-lock.yaml|package-lock.json' | while read -r f; do
+              echo "Resolving lockfile conflict: $f"
+              git checkout --theirs -- "$f"
+              git add -- "$f"
+            done
             remaining=$(git diff --name-only --diff-filter=U)
             if [ -n "$remaining" ]; then
               echo "Real (non-workflow) conflicts remain:"
